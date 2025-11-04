@@ -4,8 +4,7 @@ import { Recipe, ScannedProductDetails, PantryItem, QuantityUnit } from '../type
 // Lazily initialize the AI client to prevent crashing if the API key is not set.
 // This allows the app to run in "simulation mode" gracefully.
 const getAiClient = (): GoogleGenAI | null => {
-    // FIX: Per @google/genai guidelines, the API key must be sourced from process.env.API_KEY.
-    // This also resolves the TypeScript error for 'import.meta.env'.
+    // FIX: Per coding guidelines, the API key must be obtained from process.env.API_KEY.
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
         return null;
