@@ -1,9 +1,9 @@
 
+
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { User, PantryItem, Donation, ItemStatus, UserLevel, UserType } from '../types';
 import { SAMPLE_USERS } from '../constants';
 import { generateProductImage, getNutritionInfo, validatePantryItem } from '../services/geminiService';
-import { sendWelcomeEmail, sendExpiryNotificationEmail } from '../services/emailService';
 import { differenceInDays, isBefore, parseJSON, startOfToday, isValid } from 'date-fns';
 
 /**
@@ -128,10 +128,6 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         setUsers(prevUsers => [...prevUsers, newUser]);
         setCurrentUserId(newUser.id);
 
-        sendWelcomeEmail(newUser.name, newUser.email).catch(err => {
-            console.error("Background task to send welcome email failed:", err);
-        });
-
         return newUser;
     }, [users, showToast]);
 
@@ -140,7 +136,7 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
     }, []);
 
 
-    // --- BACKGROUND TASKS (Email notifications, initial image generation) ---
+    // --- BACKGROUND TASKS (Initial image generation) ---
 
     useEffect(() => {
         if (currentUser) {
@@ -165,44 +161,6 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
             }
         }
     }, [currentUser, pantryItems]); 
-
-    useEffect(() => {
-        if (currentUser && pantryItems.length > 0) {
-            const today = new Date().toISOString().split('T')[0];
-            const lastEmailSentDate = localStorage.getItem('lastExpiryEmailDate');
-
-            if (lastEmailSentDate !== today) {
-                const todayStart = startOfToday();
-                const activeItems = pantryItems.filter(item => item.status === ItemStatus.Active);
-                
-                const expired = activeItems.filter(item => {
-                    try {
-                        const expiryDate = parseJSON(item.expiryDate);
-                        return isValid(expiryDate) && isBefore(expiryDate, todayStart);
-                    } catch { return false; }
-                });
-
-                const expiringSoon = activeItems.filter(item => {
-                    try {
-                        const expiryDate = parseJSON(item.expiryDate);
-                        if (!isValid(expiryDate)) return false;
-                        const daysLeft = differenceInDays(expiryDate, todayStart);
-                        return daysLeft >= 0 && daysLeft <= 3;
-                    } catch { return false; }
-                });
-
-                if (expired.length > 0 || expiringSoon.length > 0) {
-                    sendExpiryNotificationEmail(currentUser.name, currentUser.email, expired, expiringSoon)
-                        .then(() => {
-                            localStorage.setItem('lastExpiryEmailDate', today);
-                        })
-                        .catch(err => {
-                            console.error("Background task to send daily expiry notification email failed:", err);
-                        });
-                }
-            }
-        }
-    }, [currentUser, pantryItems]);
 
 
     // --- REWARDS & DONATIONS ---
