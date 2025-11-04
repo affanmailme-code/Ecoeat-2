@@ -4,7 +4,9 @@ import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Recipe, ScannedProductDetails, PantryItem, QuantityUnit } from '../types';
 
 // The API key is sourced from environment variables, which is a secure practice.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// When running locally without a key, the functions below will enter a "simulation mode".
+const apiKey = process.env.API_KEY as string;
+const ai = new GoogleGenAI({ apiKey });
 
 /**
  * Generates recipe suggestions from the Gemini API based on a list of ingredients.
@@ -13,6 +15,31 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
  * @returns A promise that resolves to an array of Recipe objects.
  */
 export const generateRecipes = async (ingredients: string[]): Promise<Recipe[]> => {
+  const fallbackRecipes = [
+    {
+        title: "Fallback: Quick Spinach & Tomato Omelette",
+        ingredients: ["2 Eggs", "Handful of Spinach", "5 Cherry Tomatoes", "Splash of Milk", "Salt & Pepper"],
+        steps: ["Whisk eggs, milk, salt, and pepper.", "Pour into a hot, oiled pan.", "Add spinach and halved tomatoes.", "Cook until set, then fold and serve."],
+        estimatedTime: "10 mins",
+        sustainabilityTip: "Using fresh produce before it wilts saves nutrients and reduces your carbon footprint.",
+        usedIngredients: ingredients.filter(i => /spinach|tomato|egg/i.test(i)),
+    },
+    {
+        title: "Fallback: Creamy Yogurt & Berry Smoothie",
+        ingredients: ["1 cup Greek Yogurt", "1/2 cup Milk", "Handful of berries (frozen or fresh)", "1 tsp Honey (optional)"],
+        steps: ["Combine all ingredients in a blender.", "Blend until smooth.", "Pour into a glass and enjoy immediately."],
+        estimatedTime: "5 mins",
+        sustainabilityTip: "Rescued dairy items that are near their expiry date are perfect for smoothies, preventing waste.",
+        usedIngredients: ingredients.filter(i => /yogurt|milk|berry/i.test(i)),
+    }
+  ];
+
+  // Simulation Mode: If no API key is present (local development), return fallback recipes.
+  if (!apiKey) {
+      console.log("SIMULATION: No API key. Returning fallback recipes.");
+      return new Promise(resolve => setTimeout(() => resolve(fallbackRecipes), 1000));
+  }
+  
   // Combine the ingredients into a comma-separated string for the prompt.
   const ingredientList = ingredients.join(', ');
   
@@ -71,24 +98,7 @@ export const generateRecipes = async (ingredients: string[]): Promise<Recipe[]> 
     // If the API call fails, log the error and return a set of sample recipes.
     // This makes the app more resilient and provides a fallback user experience.
     console.error("Error generating recipes from Gemini API:", error);
-    return [
-        {
-            title: "Fallback: Quick Spinach & Tomato Omelette",
-            ingredients: ["2 Eggs", "Handful of Spinach", "5 Cherry Tomatoes", "Splash of Milk", "Salt & Pepper"],
-            steps: ["Whisk eggs, milk, salt, and pepper.", "Pour into a hot, oiled pan.", "Add spinach and halved tomatoes.", "Cook until set, then fold and serve."],
-            estimatedTime: "10 mins",
-            sustainabilityTip: "Using fresh produce before it wilts saves nutrients and reduces your carbon footprint.",
-            usedIngredients: ingredients.filter(i => /spinach|tomato|egg/i.test(i)),
-        },
-        {
-            title: "Fallback: Creamy Yogurt & Berry Smoothie",
-            ingredients: ["1 cup Greek Yogurt", "1/2 cup Milk", "Handful of berries (frozen or fresh)", "1 tsp Honey (optional)"],
-            steps: ["Combine all ingredients in a blender.", "Blend until smooth.", "Pour into a glass and enjoy immediately."],
-            estimatedTime: "5 mins",
-            sustainabilityTip: "Rescued dairy items that are near their expiry date are perfect for smoothies, preventing waste.",
-            usedIngredients: ingredients.filter(i => /yogurt|milk|berry/i.test(i)),
-        }
-    ];
+    return fallbackRecipes;
   }
 };
 
@@ -100,7 +110,13 @@ export const generateRecipes = async (ingredients: string[]): Promise<Recipe[]> 
  * @returns A promise that resolves to a base64 Data URL string of the image or a fallback URL.
  */
 export const generateProductImage = async (productName: string, unit?: QuantityUnit): Promise<string> => {
-  const fallbackUrl = `https://picsum.photos/seed/${encodeURIComponent(productName)}/300/200`;
+  const fallbackUrl = `https://placehold.co/400x300/161B22/E5E7EB?text=${encodeURIComponent(productName)}`;
+
+  // Simulation Mode: If no API key is present (local development), immediately return the fallback URL.
+  if (!apiKey) {
+    console.log("SIMULATION: No API key. Returning fallback image URL.");
+    return fallbackUrl;
+  }
 
   try {
     // Provide context to the AI based on the unit to get a more accurate image.
@@ -111,7 +127,7 @@ export const generateProductImage = async (productName: string, unit?: QuantityU
         unitDescriptor = ' as a solid item or in packaged form';
     }
 
-    const prompt = `A high-quality, clean product photo of ${productName}${unitDescriptor}, on a plain white background. The image should be clear, well-lit, and centered, suitable for a pantry app icon.`;
+    const prompt = `A single, photorealistic image of ${productName}${unitDescriptor}. The item should be centered on a clean, plain white background. The photo should be high-quality, well-lit, and look like a professional product shot for a grocery app.`;
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
@@ -150,6 +166,12 @@ export const generateProductImage = async (productName: string, unit?: QuantityU
  * @returns A promise that resolves to an object with the scanned product details, or null on failure.
  */
 export const extractProductDetailsFromImage = async (base64ImageData: string): Promise<ScannedProductDetails | null> => {
+    // Simulation Mode: If no API key is present, return null.
+    if (!apiKey) {
+      console.log("SIMULATION: No API key. Image extraction disabled.");
+      return null;
+    }
+    
     const systemInstruction = `You are an AI assistant for the EcoEats mobile app. Your task is to analyze an image of a barcode label or packaged food product. Return accurate product details in JSON format.
     - If expiry date is not visible, respond with an empty string for expiry_date.
     - If the barcode number is visible, return it.
@@ -202,6 +224,20 @@ export const extractProductDetailsFromImage = async (base64ImageData: string): P
  * @returns A promise that resolves to a nutrition object or null on failure.
  */
 export const getNutritionInfo = async (productName: string): Promise<PantryItem['nutrition'] | null> => {
+  // Simulation Mode: If no API key, return mock data for common items to ensure the app is testable.
+  if (!apiKey) {
+    console.log("SIMULATION: No API key. Returning mock nutrition data.");
+    const mockDb: { [key: string]: PantryItem['nutrition'] } = {
+      'apple': { calories: '52 kcal', protein: '0.3g', carbs: '14g', fat: '0.2g', fiber: '2.4g' },
+      'banana': { calories: '89 kcal', protein: '1.1g', carbs: '23g', fat: '0.3g', fiber: '2.6g' },
+      'orange': { calories: '47 kcal', protein: '0.9g', carbs: '12g', fat: '0.1g', fiber: '2.4g' },
+      'milk': { calories: '42 kcal', protein: '3.4g', carbs: '5g', fat: '1g', fiber: '0g' },
+      'bread': { calories: '265 kcal', protein: '9g', carbs: '49g', fat: '3.2g', fiber: '2.7g' },
+    };
+    const mockData = mockDb[productName.toLowerCase()] || null;
+    return new Promise(resolve => setTimeout(() => resolve(mockData), 500));
+  }
+  
   const systemInstruction = "You are a helpful nutrition assistant. Given a food product name, provide its typical nutritional values per 100g serving. If you cannot find information, return null for all values. Provide values as strings, including units (e.g., '50 kcal').";
   const userPrompt = `Provide nutritional information for: ${productName}.`;
 
@@ -249,6 +285,12 @@ export const getNutritionInfo = async (productName: string): Promise<PantryItem[
  * @returns A promise that resolves to an object indicating if it's a food item and a reason.
  */
 export const validatePantryItem = async (productName: string): Promise<{ isFoodItem: boolean; reason: string; }> => {
+  // Simulation Mode: If no API key, assume all items are valid food items.
+  if (!apiKey) {
+    console.log("SIMULATION: No API key. Skipping item validation.");
+    return { isFoodItem: true, reason: 'API validation skipped in simulation mode.' };
+  }
+
   const systemInstruction = "You are a food item validation assistant. Your task is to determine if a given product name is a common food, beverage, or grocery item. Please respond in JSON format.";
   const userPrompt = `Is "${productName}" a common food, beverage, or grocery item?`;
 

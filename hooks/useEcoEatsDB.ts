@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { User, PantryItem, Donation, ItemStatus, UserLevel, UserType } from '../types';
 import { SAMPLE_USERS } from '../constants';
 import { generateProductImage, getNutritionInfo, validatePantryItem } from '../services/geminiService';
+import { sendWelcomeEmail, sendExpiryNotificationEmail } from '../services/emailService';
 import { differenceInDays, isBefore, parseJSON, startOfToday, isValid } from 'date-fns';
 
 /**
@@ -128,6 +129,10 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         setUsers(prevUsers => [...prevUsers, newUser]);
         setCurrentUserId(newUser.id);
 
+        sendWelcomeEmail(newUser.name, newUser.email).catch(err => {
+            console.error("Background task to send welcome email failed:", err);
+        });
+
         return newUser;
     }, [users, showToast]);
 
@@ -136,7 +141,7 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
     }, []);
 
 
-    // --- BACKGROUND TASKS (Initial image generation) ---
+    // --- BACKGROUND TASKS (Email notifications, initial image generation) ---
 
     useEffect(() => {
         if (currentUser) {
@@ -161,6 +166,44 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
             }
         }
     }, [currentUser, pantryItems]); 
+
+    useEffect(() => {
+        if (currentUser && pantryItems.length > 0) {
+            const today = new Date().toISOString().split('T')[0];
+            const lastEmailSentDate = localStorage.getItem('lastExpiryEmailDate');
+
+            if (lastEmailSentDate !== today) {
+                const todayStart = startOfToday();
+                const activeItems = pantryItems.filter(item => item.status === ItemStatus.Active);
+                
+                const expired = activeItems.filter(item => {
+                    try {
+                        const expiryDate = parseJSON(item.expiryDate);
+                        return isValid(expiryDate) && isBefore(expiryDate, todayStart);
+                    } catch { return false; }
+                });
+
+                const expiringSoon = activeItems.filter(item => {
+                    try {
+                        const expiryDate = parseJSON(item.expiryDate);
+                        if (!isValid(expiryDate)) return false;
+                        const daysLeft = differenceInDays(expiryDate, todayStart);
+                        return daysLeft >= 0 && daysLeft <= 3;
+                    } catch { return false; }
+                });
+
+                if (expired.length > 0 || expiringSoon.length > 0) {
+                    sendExpiryNotificationEmail(currentUser.name, currentUser.email, expired, expiringSoon)
+                        .then(() => {
+                            localStorage.setItem('lastExpiryEmailDate', today);
+                        })
+                        .catch(err => {
+                            console.error("Background task to send daily expiry notification email failed:", err);
+                        });
+                }
+            }
+        }
+    }, [currentUser, pantryItems]);
 
 
     // --- REWARDS & DONATIONS ---
@@ -207,6 +250,7 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
              throw new Error("Product name cannot be empty.");
         }
 
+        // Concurrently fetch nutrition info and generate an image.
         const nutritionPromise = getNutritionInfo(trimmedProductName);
         const imagePromise = item.imageURL 
             ? Promise.resolve(item.imageURL)
@@ -214,10 +258,9 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         
         const [nutrition, imageUrl] = await Promise.all([nutritionPromise, imagePromise]);
         
-        // If nutrition info can't be found, it's a critical error. Block the item addition.
-        if (!nutrition) {
-            throw new Error(`Could not find nutrition info for "${trimmedProductName}". Please check the name for typos and try again.`);
-        }
+        // The application will no longer throw an error if nutrition information cannot be found.
+        // Instead, the item will be added successfully, and the nutrition field will be left undefined.
+        // This makes the app more resilient to Gemini API failures or unrecognized food items.
 
         const newItem: PantryItem = {
             ...item,
@@ -226,10 +269,10 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
             addedDate: new Date().toISOString(),
             status: ItemStatus.Active,
             imageURL: imageUrl,
-            nutrition: nutrition,
+            nutrition: nutrition || undefined, // Gracefully handle null nutrition
         };
         setPantryItems(prev => [...prev, newItem]);
-    }, [showToast]);
+    }, []);
 
     const updateItemStatus = useCallback((itemId: string, status: ItemStatus) => {
         setPantryItems(prev => {
@@ -260,6 +303,8 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         setPantryItems(prev => prev.filter(item => !itemIds.includes(item.id)));
     }, []);
 
+
+
     const addDonation = useCallback((itemIds: string[], ngoName: string) => {
         if (!currentUser) return;
 
@@ -275,10 +320,18 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         };
         setDonations(prev => [...prev, newDonation]);
         
-        setPantryItems(prev => prev.filter(item => !itemIds.includes(item.id)));
+        // This was incorrect. Status should be updated, not filtered out completely
+        // to maintain data integrity for stats.
+        setPantryItems(prev => prev.map(item => 
+            itemIds.includes(item.id) 
+            ? { ...item, status: ItemStatus.Donated, dateCompleted: new Date().toISOString() } 
+            : item
+        ));
+        
 
         addPoints(pointsToAdd, 'Thank you for donating');
     }, [currentUser, addPoints]);
+
 
     return {
         currentUser,
