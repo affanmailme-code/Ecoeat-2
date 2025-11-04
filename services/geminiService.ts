@@ -1,12 +1,22 @@
-
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Recipe, ScannedProductDetails, PantryItem, QuantityUnit } from '../types';
 
-// The API key is sourced from environment variables, which is a secure practice.
-// When running locally without a key, the functions below will enter a "simulation mode".
-const apiKey = process.env.API_KEY as string;
-const ai = new GoogleGenAI({ apiKey });
+// Lazily initialize the AI client to prevent crashing if the API key is not set.
+// This allows the app to run in "simulation mode" gracefully.
+const getAiClient = (): GoogleGenAI | null => {
+    const apiKey = process.env.API_KEY as string;
+    if (!apiKey) {
+        return null;
+    }
+    // The library constructor might throw if the key is invalid, so wrap in try-catch.
+    try {
+        return new GoogleGenAI({ apiKey });
+    } catch (error) {
+        console.error("Failed to initialize GoogleGenAI. The API key might be invalid.", error);
+        return null;
+    }
+};
+
 
 /**
  * Generates recipe suggestions from the Gemini API based on a list of ingredients.
@@ -34,8 +44,9 @@ export const generateRecipes = async (ingredients: string[]): Promise<Recipe[]> 
     }
   ];
 
+  const ai = getAiClient();
   // Simulation Mode: If no API key is present (local development), return fallback recipes.
-  if (!apiKey) {
+  if (!ai) {
       console.log("SIMULATION: No API key. Returning fallback recipes.");
       return new Promise(resolve => setTimeout(() => resolve(fallbackRecipes), 1000));
   }
@@ -112,8 +123,9 @@ export const generateRecipes = async (ingredients: string[]): Promise<Recipe[]> 
 export const generateProductImage = async (productName: string, unit?: QuantityUnit): Promise<string> => {
   const fallbackUrl = `https://placehold.co/400x300/161B22/E5E7EB?text=${encodeURIComponent(productName)}`;
 
+  const ai = getAiClient();
   // Simulation Mode: If no API key is present (local development), immediately return the fallback URL.
-  if (!apiKey) {
+  if (!ai) {
     console.log("SIMULATION: No API key. Returning fallback image URL.");
     return fallbackUrl;
   }
@@ -166,8 +178,9 @@ export const generateProductImage = async (productName: string, unit?: QuantityU
  * @returns A promise that resolves to an object with the scanned product details, or null on failure.
  */
 export const extractProductDetailsFromImage = async (base64ImageData: string): Promise<ScannedProductDetails | null> => {
+    const ai = getAiClient();
     // Simulation Mode: If no API key is present, return null.
-    if (!apiKey) {
+    if (!ai) {
       console.log("SIMULATION: No API key. Image extraction disabled.");
       return null;
     }
@@ -224,8 +237,9 @@ export const extractProductDetailsFromImage = async (base64ImageData: string): P
  * @returns A promise that resolves to a nutrition object or null on failure.
  */
 export const getNutritionInfo = async (productName: string): Promise<PantryItem['nutrition'] | null> => {
+  const ai = getAiClient();
   // Simulation Mode: If no API key, return mock data for common items to ensure the app is testable.
-  if (!apiKey) {
+  if (!ai) {
     console.log("SIMULATION: No API key. Returning mock nutrition data.");
     const mockDb: { [key: string]: PantryItem['nutrition'] } = {
       'apple': { calories: '52 kcal', protein: '0.3g', carbs: '14g', fat: '0.2g', fiber: '2.4g' },
@@ -285,8 +299,9 @@ export const getNutritionInfo = async (productName: string): Promise<PantryItem[
  * @returns A promise that resolves to an object indicating if it's a food item and a reason.
  */
 export const validatePantryItem = async (productName: string): Promise<{ isFoodItem: boolean; reason: string; }> => {
+  const ai = getAiClient();
   // Simulation Mode: If no API key, assume all items are valid food items.
-  if (!apiKey) {
+  if (!ai) {
     console.log("SIMULATION: No API key. Skipping item validation.");
     return { isFoodItem: true, reason: 'API validation skipped in simulation mode.' };
   }
