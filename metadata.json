@@ -1,0 +1,8 @@
+{
+  "name": "EcoEats2",
+  "description": "EcoEats helps you reduce food waste, save money, and make a positive social impact by tracking pantry items, generating AI-powered recipes, and facilitating food donations.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
