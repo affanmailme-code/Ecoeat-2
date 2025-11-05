@@ -3,6 +3,8 @@ import { PantryItem, ItemStatus, QuantityUnit } from '../types';
 import { Button } from './Button';
 import { Trash, Check } from './icons';
 import { differenceInDays, parseJSON, format, isValid } from 'date-fns';
+import useLocalImage from '../hooks/useLocalImage';
+
 
 interface PantryItemCardProps {
     item: PantryItem;
@@ -18,6 +20,8 @@ export const PantryItemCard: React.FC<PantryItemCardProps> = ({ item, onClick, o
     let daysLeft: number | null = null;
     let formattedExpiry = 'Invalid Date';
     
+    const { imageSrc, isLoading } = useLocalImage(item);
+
     try {
         const expiryDate = parseJSON(item.expiryDate);
         if (isValid(expiryDate)) {
@@ -56,16 +60,20 @@ export const PantryItemCard: React.FC<PantryItemCardProps> = ({ item, onClick, o
             <div className={`absolute top-0 left-0 h-full w-1 transition-all ${isExpired ? 'bg-red-500 group-hover:bg-red-400' : 'bg-green-500 group-hover:bg-green-400'}`}></div>
             
             <div className="w-full h-40 bg-black/20 rounded-md flex items-center justify-center overflow-hidden pointer-events-none">
-                <img 
-                    src={item.imageURL} 
-                    alt={item.productName} 
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null; // prevents looping
-                        target.src = `https://picsum.photos/seed/${encodeURIComponent(item.productName)}/300/200`;
-                    }}
-                />
+                {isLoading ? (
+                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-500"></div>
+                ) : (
+                    <img 
+                        src={imageSrc} 
+                        alt={item.productName} 
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.onerror = null; // prevents looping
+                            target.src = `https://picsum.photos/seed/${encodeURIComponent(item.productName)}/300/200`;
+                        }}
+                    />
+                )}
             </div>
 
             <div className="pl-2 flex-grow flex flex-col">

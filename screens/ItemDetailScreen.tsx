@@ -3,6 +3,7 @@ import { PantryItem, ItemStatus } from '../types';
 import { Button } from '../components/Button';
 import { ArrowLeft, Calendar, ShoppingBasket, Check, Trash } from '../components/icons';
 import { format, parseJSON, isValid } from 'date-fns';
+import useLocalImage from '../hooks/useLocalImage';
 
 interface ItemDetailScreenProps {
   item: PantryItem;
@@ -30,6 +31,7 @@ const NutritionRow: React.FC<{ label: string, value: string, isBold?: boolean }>
 
 const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({ item, onBack, onUpdateStatus, onDelete }) => {
     
+    const { imageSrc, isLoading } = useLocalImage(item);
     const formattedExpiry = isValid(parseJSON(item.expiryDate)) ? format(parseJSON(item.expiryDate), 'MMMM d, yyyy') : 'N/A';
     
     return (
@@ -45,16 +47,20 @@ const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({ item, onBack, onUpd
                 {/* Left Side: Image and Details */}
                 <div className="space-y-6">
                     <div className="w-full h-64 bg-black/20 rounded-xl shadow-lg border-2 border-gray-700/50 flex items-center justify-center overflow-hidden">
-                        <img 
-                            src={item.imageURL} 
-                            alt={item.productName} 
-                            className="w-full h-full object-contain"
-                            onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.onerror = null;
-                                target.src = `https://picsum.photos/seed/${encodeURIComponent(item.productName)}/400/300`;
-                            }}
-                        />
+                        {isLoading ? (
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-500"></div>
+                        ) : (
+                            <img 
+                                src={imageSrc} 
+                                alt={item.productName} 
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.onerror = null;
+                                    target.src = `https://picsum.photos/seed/${encodeURIComponent(item.productName)}/400/300`;
+                                }}
+                            />
+                        )}
                     </div>
                      <div>
                         <p className="text-sm font-semibold text-green-400">{item.category}</p>

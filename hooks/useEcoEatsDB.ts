@@ -1,10 +1,12 @@
 
 
+
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { User, PantryItem, Donation, ItemStatus, UserLevel, UserType } from '../types';
 import { SAMPLE_USERS } from '../constants';
 import { generateProductImage, getNutritionInfo, validatePantryItem } from '../services/geminiService';
 import { sendWelcomeEmail, sendExpiryNotificationEmail } from '../services/emailService';
+import { storeImage, deleteImage, deleteImages } from '../services/imageDB';
 import { differenceInDays, isBefore, parseJSON, startOfToday, isValid } from 'date-fns';
 
 /**
@@ -32,7 +34,12 @@ const setStoredItem = <T>(key: string, value: T): void => {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch (error) {
-    console.error(`Error writing to localStorage key “${key}”:`, error);
+    // Check for QuotaExceededError and provide a more specific message.
+    if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
+         console.error(`Error writing to localStorage: The storage quota has been exceeded. Key: “${key}”`);
+    } else {
+        console.error(`Error writing to localStorage key “${key}”:`, error);
+    }
   }
 };
 
@@ -154,6 +161,16 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
                         pantryItems.map(async (item) => {
                             if (item.imageURL.includes('picsum.photos')) {
                                 const newImageUrl = await generateProductImage(item.productName, item.quantityUnit);
+                                // Store new image in IndexedDB and update reference
+                                if (newImageUrl.startsWith('data:image')) {
+                                    try {
+                                        await storeImage(item.id, newImageUrl);
+                                        return { ...item, imageURL: `indexeddb:${item.id}` };
+                                    } catch (err) {
+                                        console.error("Failed to store initial image in IndexedDB", err);
+                                        return item; // Keep old image on failure
+                                    }
+                                }
                                 return { ...item, imageURL: newImageUrl };
                             }
                             return item;
@@ -249,30 +266,46 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         if (!trimmedProductName) {
              throw new Error("Product name cannot be empty.");
         }
+        
+        const newItemId = `item${Date.now()}`;
 
-        // Concurrently fetch nutrition info and generate an image.
-        const nutritionPromise = getNutritionInfo(trimmedProductName);
-        const imagePromise = item.imageURL 
+        // Get the image first, whether it's provided, generated, or a placeholder.
+        const imageUrlPromise = item.imageURL 
             ? Promise.resolve(item.imageURL)
             : generateProductImage(trimmedProductName, item.quantityUnit);
         
-        const [nutrition, imageUrl] = await Promise.all([nutritionPromise, imagePromise]);
-        
-        // The application will no longer throw an error if nutrition information cannot be found.
-        // Instead, the item will be added successfully, and the nutrition field will be left undefined.
-        // This makes the app more resilient to Gemini API failures or unrecognized food items.
+        const [nutrition, initialImageUrl] = await Promise.all([
+            getNutritionInfo(trimmedProductName),
+            imageUrlPromise
+        ]);
+
+        let finalImageUrl = initialImageUrl;
+        // If the resulting image URL is a base64 string, store it and replace the URL with an identifier.
+        if (initialImageUrl && initialImageUrl.startsWith('data:image')) {
+            try {
+                await storeImage(newItemId, initialImageUrl);
+                finalImageUrl = `indexeddb:${newItemId}`;
+            } catch (error) {
+                console.error("Failed to store image in IndexedDB, will use placeholder.", error);
+                 if (showToast) {
+                    showToast('Could not save image locally.', 'warning');
+                }
+                // Fallback if IndexedDB fails
+                finalImageUrl = `https://placehold.co/400x300/161B22/E5E7EB?text=${encodeURIComponent(trimmedProductName)}`;
+            }
+        }
 
         const newItem: PantryItem = {
             ...item,
             productName: trimmedProductName,
-            id: `item${Date.now()}`,
+            id: newItemId,
             addedDate: new Date().toISOString(),
             status: ItemStatus.Active,
-            imageURL: imageUrl,
-            nutrition: nutrition || undefined, // Gracefully handle null nutrition
+            imageURL: finalImageUrl,
+            nutrition: nutrition || undefined,
         };
         setPantryItems(prev => [...prev, newItem]);
-    }, []);
+    }, [showToast]);
 
     const updateItemStatus = useCallback((itemId: string, status: ItemStatus) => {
         setPantryItems(prev => {
@@ -296,10 +329,14 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
     }, [addPoints]);
 
     const deleteItem = useCallback((itemId: string) => {
+        // Asynchronously delete from IndexedDB. We don't need to wait for it to finish.
+        deleteImage(itemId).catch(err => console.error(`Failed to delete image ${itemId} from DB`, err));
         setPantryItems(prev => prev.filter(item => item.id !== itemId));
     }, []);
 
     const deleteMultipleItems = useCallback((itemIds: string[]) => {
+        // Asynchronously delete multiple images from IndexedDB.
+        deleteImages(itemIds).catch(err => console.error(`Failed to bulk delete images from DB`, err));
         setPantryItems(prev => prev.filter(item => !itemIds.includes(item.id)));
     }, []);
 
