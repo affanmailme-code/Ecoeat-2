@@ -9,13 +9,7 @@ const getAiClient = (): GoogleGenAI | null => {
     if (!apiKey) {
         return null;
     }
-    // The library constructor might throw if the key is invalid, so wrap in try-catch.
-    try {
-        return new GoogleGenAI({ apiKey });
-    } catch (error) {
-        console.error("Failed to initialize GoogleGenAI. The API key might be invalid.", error);
-        return null;
-    }
+    return new GoogleGenAI({ apiKey });
 };
 
 
