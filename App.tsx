@@ -26,6 +26,7 @@ const App: React.FC = () => {
         users,
         pantryItems,
         donations,
+        redemptionHistory,
         login,
         signUp,
         logout,
@@ -35,6 +36,7 @@ const App: React.FC = () => {
         deleteMultipleItems,
         addDonation,
         addPoints,
+        redeemReward,
     } = useEcoEatsDB({ showToast });
 
     const handleSignUpSuccess = () => {
@@ -52,7 +54,12 @@ const App: React.FC = () => {
             case 'Donate':
                 return <DonateScreen pantryItems={pantryItems} addDonation={addDonation} />;
             case 'Rewards':
-                return <RewardsScreen user={currentUser as User} users={users} />;
+                return <RewardsScreen 
+                    user={currentUser as User} 
+                    users={users} 
+                    redemptionHistory={redemptionHistory} 
+                    redeemReward={redeemReward} 
+                />;
             case 'About':
                 return <AboutScreen />;
             default:

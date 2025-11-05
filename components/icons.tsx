@@ -91,3 +91,5 @@ export const Sun = createIcon(<><circle cx="12" cy="12" r="4" /><path d="M12 2v2
 export const Upload = createIcon(<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></>);
 export const Sparkles = createIcon(<path d="M9.9 2.1c.1-.3.4-.4.6-.4s.5.1.6.4l1 3.1c.1.2.2.3.4.4l3.1 1c.3.1.4.4.4.6s-.1.5-.4.6l-3.1 1c-.2.1-.3.2-.4.4l-1 3.1c-.1.3-.4.4-.6.4s-.5-.1-.6-.4l-1-3.1c-.1-.2-.2-.3-.4-.4l-3.1-1c-.3-.1-.4-.4-.4-.6s.1-.5.4-.6l3.1-1c.2-.1.3-.2.4-.4l1-3.1Z"/>);
 export const ArrowLeft = createIcon(<><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></>);
+export const Gift = createIcon(<><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A2.5 2.5 0 0 1 12 5.5V8"/><path d="M16.5 8a2.5 2.5 0 0 0 0-5A2.5 2.5 0 0 0 12 5.5V8"/></>);
+export const History = createIcon(<><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></>);

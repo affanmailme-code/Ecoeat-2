@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { PantryItem, ItemStatus, QuantityUnit, ScannedProductDetails } from '../types';
 import { PantryItemCard } from '../components/PantryItemCard';
-import { Plus, X, Search, Calendar, Upload, Sparkles, Trash } from '../components/icons';
+import { Plus, X, Search, Calendar, Upload, Sparkles, Trash, Image as ImageIcon } from '../components/icons';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
 import { CATEGORIES } from '../constants';
@@ -31,9 +31,9 @@ const AddItemForm: React.FC<{ onAddItem: (item: any) => Promise<void>, onCancel:
     const [isGeneratingImage, setIsGeneratingImage] = useState(false);
     const [autofillError, setAutofillError] = useState<string | null>(null);
     const [formError, setFormError] = useState<string | null>(null);
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dateInputRef = useRef<HTMLInputElement>(null);
-
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -62,6 +62,24 @@ const AddItemForm: React.FC<{ onAddItem: (item: any) => Promise<void>, onCancel:
             }
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleGenerateImage = async () => {
+        if (!newItem.productName.trim()) {
+            setAutofillError("Please enter a product name first.");
+            return;
+        }
+        setAutofillError(null);
+        setIsGeneratingImage(true);
+        try {
+            const imageUrl = await generateProductImage(newItem.productName, newItem.quantityUnit);
+            setNewItem(prev => ({ ...prev, imageURL: imageUrl }));
+        } catch (error) {
+            console.error("Error generating image:", error);
+            setAutofillError("Failed to generate AI image. Please try again.");
+        } finally {
+            setIsGeneratingImage(false);
         }
     };
 
@@ -133,24 +151,6 @@ const AddItemForm: React.FC<{ onAddItem: (item: any) => Promise<void>, onCancel:
         };
         reader.readAsDataURL(file);
     };
-    
-    const handleGenerateImage = async () => {
-        if (!newItem.productName) {
-            setFormError("Please enter a product name to generate an image.");
-            return;
-        }
-        setFormError(null);
-        setIsGeneratingImage(true);
-        try {
-            const imageUrl = await generateProductImage(newItem.productName);
-            setNewItem(prev => ({ ...prev, imageURL: imageUrl }));
-        } catch (error) {
-            console.error("Error generating image:", error);
-            setFormError("Could not generate image. Please try again.");
-        } finally {
-            setIsGeneratingImage(false);
-        }
-    };
 
     const openDatePicker = () => {
         const input = dateInputRef.current;
@@ -165,36 +165,41 @@ const AddItemForm: React.FC<{ onAddItem: (item: any) => Promise<void>, onCancel:
 
 
     const formInputClasses = "block w-full bg-transparent border-0 border-b border-gray-600 focus:ring-0 focus:border-emerald-400 p-2 text-gray-200 placeholder-gray-500 transition-colors";
-    const topButtonClasses = "w-full flex flex-col items-center justify-center p-3 rounded-lg bg-[#2D3748] hover:bg-[#4A5568] border border-gray-600 transition-colors text-gray-300 space-y-2 disabled:opacity-50 disabled:cursor-not-allowed";
     
+    const anyLoading = isSubmitting || isUploading || isGeneratingImage;
+
     return (
         <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-2 gap-3">
-                 <button type="button" onClick={handleUploadClick} disabled={isUploading || isSubmitting || isGeneratingImage} className={topButtonClasses}>
-                    <Upload size={24} />
-                    <span className="font-semibold text-sm">{isUploading ? 'Scanning...' : 'Upload & Scan'}</span>
-                </button>
-                 <button type="button" onClick={handleGenerateImage} disabled={isUploading || isSubmitting || isGeneratingImage} className={topButtonClasses}>
-                    <Sparkles size={24} />
-                    <span className="font-semibold text-sm">{isGeneratingImage ? 'Generating...' : 'Generate AI Image'}</span>
-                </button>
+            <div className="w-full max-w-xs mx-auto aspect-[4/5] bg-gray-900/50 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-600 overflow-hidden relative">
+                {isGeneratingImage || isUploading ? (
+                    <div className="flex flex-col items-center justify-center text-gray-400">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-400"></div>
+                        <p className="mt-3 text-sm font-semibold">{isGeneratingImage ? 'Generating Image...' : 'Scanning...'}</p>
+                    </div>
+                ) : newItem.imageURL ? (
+                    <img src={newItem.imageURL} alt="Product preview" className="w-full h-full object-cover"/>
+                ) : (
+                    <div className="text-center text-gray-500">
+                        <ImageIcon size={48} className="mx-auto" />
+                        <p className="mt-2 text-sm">Image Preview</p>
+                    </div>
+                )}
             </div>
-            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
 
-            {newItem.imageURL && (
-                <div className="flex justify-center -mb-2">
-                    <img src={newItem.imageURL} alt="Product preview" className="h-20 w-20 object-cover rounded-lg shadow-md border-2 border-gray-600"/>
-                </div>
-            )}
+            <div className="grid grid-cols-2 gap-3">
+                <Button type="button" variant="secondary" onClick={handleUploadClick} disabled={anyLoading}>
+                    <Upload size={16} className="mr-2"/> Upload & Scan
+                </Button>
+                <Button type="button" variant="secondary" onClick={handleGenerateImage} disabled={anyLoading}>
+                    <Sparkles size={16} className="mr-2"/> Generate AI Image
+                </Button>
+            </div>
             
             {autofillError && <p className="text-amber-500 text-center text-sm -mt-2">{autofillError}</p>}
 
             <div>
                 <label className="block text-sm font-medium text-gray-400">Product Name *</label>
-                <div className="relative mt-1">
-                    <input type="text" name="productName" value={newItem.productName} onChange={handleChange} required className={`${formInputClasses} pr-8`} placeholder="e.g., Organic Milk" />
-                    <Sparkles className="absolute right-2 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-                </div>
+                <input type="text" name="productName" value={newItem.productName} onChange={handleChange} required className={formInputClasses} placeholder="e.g., Organic Milk" />
             </div>
 
             <div>
@@ -250,7 +255,7 @@ const AddItemForm: React.FC<{ onAddItem: (item: any) => Promise<void>, onCancel:
             {formError && <p className="text-red-500 text-sm text-center">{formError}</p>}
 
             <div className="pt-2">
-                 <button type="submit" disabled={isSubmitting || isUploading || isGeneratingImage} className="w-full inline-flex items-center justify-center font-bold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-px focus:ring-offset-gray-800 px-6 py-3 text-lg bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white focus:ring-cyan-500">
+                 <button type="submit" disabled={anyLoading} className="w-full inline-flex items-center justify-center font-bold rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed transform hover:-translate-y-px focus:ring-offset-gray-800 px-6 py-3 text-lg bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white focus:ring-cyan-500">
                     <Plus size={20} className="mr-1.5" />
                     {isSubmitting ? 'Adding to Pantry...' : 'Add to Pantry'}
                 </button>

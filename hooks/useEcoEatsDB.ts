@@ -1,8 +1,5 @@
-
-
-
 import { useState, useCallback, useEffect, useMemo } from 'react';
-import { User, PantryItem, Donation, ItemStatus, UserLevel, UserType } from '../types';
+import { User, PantryItem, Donation, ItemStatus, UserLevel, UserType, RedemptionHistory } from '../types';
 import { SAMPLE_USERS } from '../constants';
 import { generateProductImage, getNutritionInfo, validatePantryItem } from '../services/geminiService';
 import { sendWelcomeEmail, sendExpiryNotificationEmail } from '../services/emailService';
@@ -47,6 +44,12 @@ interface EcoEatsDBProps {
   showToast?: (message: string, type: 'success' | 'error' | 'warning') => void;
 }
 
+const REWARD_TIERS = [
+    { tier: 4, minPoints: 1000, pointsDeducted: 600, discount: 15, cashback: 100, grantsBadge: true, name: 'Planet Protector Reward' },
+    { tier: 3, minPoints: 500, pointsDeducted: 400, discount: 10, cashback: 60, grantsBadge: false, name: 'EcoHero Reward' },
+    { tier: 2, minPoints: 200, pointsDeducted: 200, discount: 5, cashback: 25, grantsBadge: false, name: 'EcoWarrior Reward' },
+    { tier: 1, minPoints: 100, pointsDeducted: 100, discount: 2, cashback: 10, grantsBadge: false, name: 'EcoSaver Reward' }
+];
 
 /**
  * This custom hook acts as the central "backend" and data layer for the entire EcoEats application.
@@ -68,6 +71,8 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
     // Pantry and donation state are now loaded reactively based on the current user ID.
     const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
     const [donations, setDonations] = useState<Donation[]>([]);
+    const [redemptionHistory, setRedemptionHistory] = useState<RedemptionHistory[]>([]);
+
     
     // --- PERSISTENCE & DATA LOADING EFFECTS ---
     useEffect(() => {
@@ -83,12 +88,15 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         if (currentUserId) {
             const userPantry = getStoredItem(`eco_eats_pantry_${currentUserId}`, []);
             const userDonations = getStoredItem(`eco_eats_donations_${currentUserId}`, []);
+            const userRedemptions = getStoredItem(`eco_eats_redemptions_${currentUserId}`, []);
             setPantryItems(userPantry);
             setDonations(userDonations);
+            setRedemptionHistory(userRedemptions);
         } else {
             // If no user is logged in, clear their data.
             setPantryItems([]);
             setDonations([]);
+            setRedemptionHistory([]);
         }
     }, [currentUserId]);
     
@@ -103,6 +111,12 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
             setStoredItem(`eco_eats_donations_${currentUserId}`, donations);
         }
     }, [donations, currentUserId]);
+
+    useEffect(() => {
+        if (currentUserId) {
+            setStoredItem(`eco_eats_redemptions_${currentUserId}`, redemptionHistory);
+        }
+    }, [redemptionHistory, currentUserId]);
     
     
     // --- AUTHENTICATION LOGIC (Simplified and more robust) ---
@@ -130,7 +144,9 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
             userType,
             ecoPoints: 0,
             level: UserLevel.EcoSaver,
-            profileImage: `https://i.pravatar.cc/150?u=${Date.now()}`
+            profileImage: `https://i.pravatar.cc/150?u=${Date.now()}`,
+            walletBalance: 0,
+            hasEcoBadge: false,
         };
 
         setUsers(prevUsers => [...prevUsers, newUser]);
@@ -258,6 +274,65 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         });
     }, [currentUserId, showToast]);
     
+    const redeemReward = useCallback((option: 'discount' | 'cashback'): { success: boolean, message: string } => {
+        if (!currentUser) {
+          return { success: false, message: 'No user logged in.' };
+        }
+    
+        const eligibleTier = REWARD_TIERS.find(tier => currentUser.ecoPoints >= tier.minPoints);
+    
+        if (!eligibleTier) {
+          if (showToast) showToast('You do not have enough points to redeem a reward.', 'warning');
+          return { success: false, message: 'Not enough points.' };
+        }
+    
+        const { pointsDeducted, cashback, discount, grantsBadge } = eligibleTier;
+        const rewardType = option === 'cashback' ? 'Cashback' : 'Discount';
+        const rewardValue = option === 'cashback' ? `₹${cashback}` : `${discount}%`;
+        
+        // Update user state
+        setUsers(prevUsers => prevUsers.map(u => {
+          if (u.id === currentUser.id) {
+            const newPoints = u.ecoPoints - pointsDeducted;
+            const newWalletBalance = option === 'cashback' ? u.walletBalance + cashback : u.walletBalance;
+    
+            const determineUserLevel = (pts: number): UserLevel => {
+                if (pts >= 501) return UserLevel.PlanetProtector;
+                if (pts >= 301) return UserLevel.EcoHero;
+                if (pts >= 101) return UserLevel.EcoWarrior;
+                return UserLevel.EcoSaver;
+            };
+            const newLevel = determineUserLevel(newPoints);
+    
+            return {
+              ...u,
+              ecoPoints: newPoints,
+              walletBalance: newWalletBalance,
+              hasEcoBadge: u.hasEcoBadge || grantsBadge,
+              level: newLevel,
+            };
+          }
+          return u;
+        }));
+    
+        // Create redemption history record
+        const newRedemption: RedemptionHistory = {
+          id: `redemption${Date.now()}`,
+          userId: currentUser.id,
+          dateRedeemed: new Date().toISOString(),
+          rewardType,
+          rewardValue,
+          pointsSpent: pointsDeducted,
+        };
+        setRedemptionHistory(prev => [newRedemption, ...prev]);
+    
+        if (showToast) showToast(`Successfully redeemed ${rewardValue}!`, 'success');
+    
+        return { success: true, message: `Successfully redeemed ${rewardValue}!` };
+    
+    }, [currentUser, showToast, setUsers, setRedemptionHistory]);
+
+
     // --- PANTRY & DATA MANAGEMENT ---
     
     const addItem = useCallback(async (item: Omit<PantryItem, 'id' | 'addedDate' | 'status' | 'nutrition'>) => {
@@ -375,6 +450,7 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         users,
         pantryItems,
         donations,
+        redemptionHistory,
         login,
         signUp,
         logout,
@@ -384,6 +460,7 @@ const useEcoEatsDB = (props: EcoEatsDBProps = {}) => {
         deleteMultipleItems,
         addDonation,
         addPoints,
+        redeemReward,
     };
 };
 

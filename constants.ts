@@ -22,6 +22,7 @@ export const SAMPLE_PANTRY_ITEMS: PantryItem[] = [
   },
 ];
 
+// FIX: Added missing walletBalance and hasEcoBadge properties to User objects to conform to the User type.
 export const SAMPLE_USERS: User[] = [
   {
     id: 'user1',
@@ -30,7 +31,9 @@ export const SAMPLE_USERS: User[] = [
     userType: UserType.Consumer,
     ecoPoints: 165,
     level: UserLevel.EcoWarrior,
-    profileImage: 'https://i.pravatar.cc/150?u=affan'
+    profileImage: 'https://i.pravatar.cc/150?u=affan',
+    walletBalance: 25,
+    hasEcoBadge: false,
   },
   {
     id: 'user-ngo',
@@ -39,17 +42,20 @@ export const SAMPLE_USERS: User[] = [
     userType: UserType.NGO,
     ecoPoints: 0,
     level: UserLevel.EcoSaver,
-    profileImage: 'https://i.pravatar.cc/150?u=ngo'
+    profileImage: 'https://i.pravatar.cc/150?u=ngo',
+    walletBalance: 0,
+    hasEcoBadge: false,
   }
 ];
 
 
+// FIX: Added missing walletBalance and hasEcoBadge properties to all user objects to conform to the User type.
 export const LEADERBOARD_USERS: User[] = [
-    { id: 'user1', name: 'Affan', email: '', userType: UserType.Consumer, ecoPoints: 165, level: UserLevel.EcoWarrior, profileImage: 'https://i.pravatar.cc/150?u=affan' },
-    { id: 'user2', name: 'MOHAMED AFFAN', email: '', userType: UserType.Consumer, ecoPoints: 15, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=mohamed' },
-    { id: 'user3', name: 'ROSHAN', email: '', userType: UserType.Consumer, ecoPoints: 10, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=roshan' },
-    { id: 'user4', name: 'Mohit', email: '', userType: UserType.Consumer, ecoPoints: 0, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=mohit' },
-    { id: 'user5', name: 'AGod', email: '', userType: UserType.Consumer, ecoPoints: 0, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=agod' },
+    { id: 'user1', name: 'Affan', email: '', userType: UserType.Consumer, ecoPoints: 165, level: UserLevel.EcoWarrior, profileImage: 'https://i.pravatar.cc/150?u=affan', walletBalance: 25, hasEcoBadge: false },
+    { id: 'user2', name: 'MOHAMED AFFAN', email: '', userType: UserType.Consumer, ecoPoints: 15, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=mohamed', walletBalance: 0, hasEcoBadge: false },
+    { id: 'user3', name: 'ROSHAN', email: '', userType: UserType.Consumer, ecoPoints: 10, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=roshan', walletBalance: 0, hasEcoBadge: false },
+    { id: 'user4', name: 'Mohit', email: '', userType: UserType.Consumer, ecoPoints: 0, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=mohit', walletBalance: 0, hasEcoBadge: false },
+    { id: 'user5', name: 'AGod', email: '', userType: UserType.Consumer, ecoPoints: 0, level: UserLevel.EcoSaver, profileImage: 'https://i.pravatar.cc/150?u=agod', walletBalance: 0, hasEcoBadge: false },
 ].sort((a, b) => b.ecoPoints - a.ecoPoints);
 
 

@@ -34,6 +34,8 @@ export interface User {
   ecoPoints: number;
   level: UserLevel;
   profileImage: string;
+  walletBalance: number;
+  hasEcoBadge: boolean;
 }
 
 export interface PantryItem {
@@ -90,6 +92,15 @@ export interface ScannedProductDetails {
   brand: string;
   barcode_number: string;
   notes: string;
+}
+
+export interface RedemptionHistory {
+  id: string;
+  userId: string;
+  dateRedeemed: string; // ISO date string
+  rewardType: 'Discount' | 'Cashback';
+  rewardValue: string; // e.g., "10%" or "₹60"
+  pointsSpent: number;
 }
 
 export type Screen = 'Home' | 'Pantry' | 'Recipes' | 'Donate' | 'Rewards' | 'About' | 'Login' | 'SignUp';

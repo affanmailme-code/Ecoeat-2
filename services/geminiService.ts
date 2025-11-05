@@ -116,7 +116,7 @@ export const generateRecipes = async (ingredients: string[]): Promise<Recipe[]> 
  * @returns A promise that resolves to a base64 Data URL string of the image or a fallback URL.
  */
 export const generateProductImage = async (productName: string, unit?: QuantityUnit): Promise<string> => {
-  const fallbackUrl = `https://placehold.co/400x300/161B22/E5E7EB?text=${encodeURIComponent(productName)}`;
+  const fallbackUrl = `https://placehold.co/400x500/161B22/E5E7EB?text=${encodeURIComponent(productName)}`;
 
   const ai = getAiClient();
   // Simulation Mode: If no API key is present (local development), immediately return the fallback URL.
@@ -134,7 +134,7 @@ export const generateProductImage = async (productName: string, unit?: QuantityU
         unitDescriptor = ' as a solid item or in packaged form';
     }
 
-    const prompt = `A single, photorealistic image of ${productName}${unitDescriptor}. The item should be centered on a clean, plain white background. The photo should be high-quality, well-lit, and look like a professional product shot for a grocery app.`;
+    const prompt = `A single, photorealistic image of ${productName}${unitDescriptor}. The item should be centered on a clean, plain white background with a portrait orientation (4:5 aspect ratio). The photo should be high-quality, well-lit, and look like a professional product shot for a grocery app.`;
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
